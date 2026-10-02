@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Serverless URL Shortener & Analytics Platform
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 512
+    Environment:
+      Variables:
+        APP_NAME: serverless-url-shortener
+        STORAGE_BACKEND: memory
+        ANALYTICS_BACKEND: dynamodb
+        IDEMPOTENCY_BACKEND: dynamodb
+        DYNAMODB_CLICK_TABLE: !Ref ClickEventsTable
+        DYNAMODB_IDEMPOTENCY_TABLE: !Ref IdempotencyTable
+
+Resources:
+  UrlShortenerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClickEventsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref IdempotencyTable
+      Events:
+        Health:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: get
+        Shorten:
+          Type: Api
+          Properties:
+            Path: /shorten
+            Method: post
+        Redirect:
+          Type: Api
+          Properties:
+            Path: /{short_code}
+            Method: get
+        Analytics:
+          Type: Api
+          Properties:
+            Path: /analytics/{short_code}
+            Method: get
+
+  ClickEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: short_code
+          AttributeType: S
+        - AttributeName: event_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: short_code
+          KeyType: HASH
+        - AttributeName: event_key
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  IdempotencyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: idempotency_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: idempotency_key
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  ClickEventsTableName:
+    Value: !Ref ClickEventsTable
+  IdempotencyTableName:
+    Value: !Ref IdempotencyTable
