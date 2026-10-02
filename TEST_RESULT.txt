@@ -1,0 +1,5 @@
+Test run after gap fixes (2026-10-02):
+
+44 passed in 2.22s
+
+44 tests: 16 original + 23 new (idempotency, expiry, backend factory) + 5 live DynamoDB idempotency tests via moto.
